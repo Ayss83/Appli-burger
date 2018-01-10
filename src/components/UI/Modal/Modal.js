@@ -5,9 +5,9 @@ import Backdrop from '../Backdrop/Backdrop';
 
 class Modal extends Component {
 
-    //le composant ne s'actualise que s'il y a un changement de sa propriété show
+    //le composant ne s'actualise que s'il y a un changement de sa propriété show ou d'un élément enfant (contenu dans le modal)
     shouldComponentUpdate(nextProps, nextState) {
-        return nextProps.show !== this.props.show;
+        return nextProps.show !== this.props.show || nextProps.children !== this.props.children;
     }
 
     render() {

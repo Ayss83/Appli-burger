@@ -2,10 +2,13 @@ import React, { Component } from 'react';
 
 import Aux from '../../hoc/WrapperHoc';
 import Burger from '../../components/Burger/Burger';
+import Spinner from '../../components/UI/Spinner/Spinner';
 
 import BuildControls from '../../components/Burger/BuildControls/BuildControls';
 import Modal from '../../components/UI/Modal/Modal';
 import OrderSummary from '../../components/Burger/OrderSummary/OrderSummary';
+import axios from '../../axios-orders';
+import errorHandler from '../../hoc/errorHandler/errorHandler';
 
 const PRIX_INGREDIENTS = {
     salade: 0.3,
@@ -16,15 +19,22 @@ const PRIX_INGREDIENTS = {
 
 class BurgerBuilder extends Component {
     state = {
-        ingredients: {
-            salade: 0,
-            bacon: 0,
-            fromage: 0,
-            viande: 0
-        },
+        ingredients: null,
         totalPrice: 2,
         achetable: false,
         modeAchat: false,
+        loading: false,
+        error: null
+    }
+
+    componentDidMount() {
+        axios.get("https://react-my-burger-8de01.firebaseio.com/ingredients.json")
+        .then(response => {
+            this.setState({ingredients: response.data});
+        })
+        .catch(error => {
+            this.setState({error: true});
+        });
     }
 
     //Méthode de mise à jour du statut disabled du bouton Commander
@@ -85,7 +95,19 @@ class BurgerBuilder extends Component {
     }
 
     purchaseContinueHandler = () => {
-        alert('ok');
+        
+        const params = [];
+
+        for (let ingredient in this.state.ingredients) {
+            params.push(encodeURIComponent(ingredient) + "=" + encodeURIComponent(this.state.ingredients[ingredient]));
+        }
+        params.push('price=' + this.state.totalPrice);
+        const query = params.join('&');
+
+        this.props.history.push({
+            pathname: '/checkout',
+            search: '?' + query
+        });
     }
 
     render() {
@@ -100,26 +122,51 @@ class BurgerBuilder extends Component {
             disabledInfo[key] = disabledInfo[key] <= 0
         }
 
+        //Initialisation à null pour éviter une erreur à cause du traitement asynchrone de state.ingredients
+        let orderSummary = null;
+
+        if(this.state.ingredients) {
+            orderSummary = <OrderSummary 
+                price={this.state.totalPrice}
+                ingredients={this.state.ingredients}
+                purchaseCanceled={this.purchaseCancelHandler}
+                purchaseContinue={this.purchaseContinueHandler}/>
+        }
+
+        //Modification de la variable orderSummary pour afficher le spinner si le chargement est en cours
+        if (this.state.loading) {
+            orderSummary = <Spinner />;
+        }
+
+        //Affichage initial, spinner si requête ok ou message d'erreur en cas d'erreur
+        let burger = this.state.error ? <p>Erreur de chargement des ingrédients</p> : <Spinner />
+
+        //Changement de la variable burger pour affichage du constructeur de burger si les ingrédients ont bien été rajouté au state
+        if(this.state.ingredients) {
+            burger = (
+                <Aux>
+                    <Burger ingredients={this.state.ingredients} />
+                    <BuildControls 
+                        ingredientAdded={this.addIngredientHandler}
+                        ingredientRemoved={this.removeIngredientHandler}
+                        achetable={this.state.achetable}
+                        disabled={disabledInfo}
+                        clicked={this.purchaseHandler}
+                        price={this.state.totalPrice} />
+                </Aux>
+            )
+        }
+
         return(
             <Aux>
                 <Modal show={this.state.modeAchat} modalClosed={this.purchaseCancelHandler}>
-                    <OrderSummary 
-                        price={this.state.totalPrice}
-                        ingredients={this.state.ingredients}
-                        purchaseCanceled={this.purchaseCancelHandler}
-                        purchaseContinue={this.purchaseContinueHandler}/>
+                    {orderSummary}
                 </Modal>
-                <Burger ingredients={this.state.ingredients} />
-                <BuildControls 
-                    ingredientAdded={this.addIngredientHandler}
-                    ingredientRemoved={this.removeIngredientHandler}
-                    achetable={this.state.achetable}
-                    disabled={disabledInfo}
-                    clicked={this.purchaseHandler}
-                    price={this.state.totalPrice} />
+                {burger}
             </Aux>
         );
     }
 }
 
-export default BurgerBuilder;
+//Utilisation du hoc de gestion d'erreur
+export default errorHandler(BurgerBuilder, axios);
